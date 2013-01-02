@@ -10,7 +10,7 @@
 #import "DTHTMLAttributedStringBuilder.h"
 #import "NSString+SlashEscaping.h"
 
-#import </usr/include/objc/objc-class.h>
+#import <objc/objc-class.h>
 
 #define TESTCASE_FILE_EXTENSION @"html"
 //#define ONLY_TEST_CURRENT 1
@@ -57,6 +57,11 @@ NSString *testCaseNameFromURL(NSURL *URL, BOOL withSpaces)
 		{
 			continue;
 		}
+#else
+			if ([[testFile lastPathComponent] isEqualToString:@"CurrentTest.html"])
+			{
+				continue;
+			}
 #endif
 			
 			if (![[testFile pathExtension] isEqualToString:TESTCASE_FILE_EXTENSION])
@@ -75,7 +80,13 @@ NSString *testCaseNameFromURL(NSURL *URL, BOOL withSpaces)
 				[test internalTestCaseWithURL:URL withTempPath:tempPath];
 			};
 			
-			IMP myIMP = imp_implementationWithBlock((__bridge void *)impBlock);
+			// See http://stackoverflow.com/questions/6357663/casting-a-block-to-a-void-for-dynamic-class-method-resolution
+#if MAC_OS_X_VERSION_MAX_ALLOWED <= MAC_OS_X_VERSION_10_7
+			void *impBlockForIMP = (void *)objc_unretainedPointer(impBlock);
+#else
+			id impBlockForIMP = (__bridge id)objc_unretainedPointer(impBlock);
+#endif
+			IMP myIMP = imp_implementationWithBlock(impBlockForIMP);
 			
 			SEL selector = NSSelectorFromString(selectorName);
 			
@@ -125,12 +136,10 @@ NSString *testCaseNameFromURL(NSURL *URL, BOOL withSpaces)
 	// our own builder
 	DTHTMLAttributedStringBuilder *doc = [[DTHTMLAttributedStringBuilder alloc] initWithHTML:testData options:nil documentAttributes:NULL];
 
-	[doc buildString];
-	
 	NSAttributedString *iosAttributedString = [doc generatedAttributedString];
 	NSString *iosString = [iosAttributedString string];
 	
-	/*
+/*
 	NSMutableString *dumpOutput = [[NSMutableString alloc] init];
 	NSData *dump = [macString dataUsingEncoding:NSUTF8StringEncoding];
 	for (NSInteger i = 0; i < [dump length]; i++)
@@ -224,6 +233,43 @@ NSString *testCaseNameFromURL(NSURL *URL, BOOL withSpaces)
 			}
 		}
 	}
+}
+
+/**
+ Tests that an 8pt font-size and a 8px font-size turn out the same font sizes
+ */
+- (void)testPixelsVersusPoints
+{
+	NSString *HTML = @"<span style=\"font-size:8pt;\">8 pt</span><span style=\"font-size:8px;\">8 px</span>";
+	NSData *data = [HTML dataUsingEncoding:NSUTF8StringEncoding];
+	
+	// create Mac version
+	NSAttributedString *macString = [[NSAttributedString alloc] initWithHTML:data baseURL:nil documentAttributes:NULL];
+
+	NSRange firstFontRangeMac;
+	NSFont *firstFontMac = [macString attribute:(id)kCTFontAttributeName atIndex:0 effectiveRange:&firstFontRangeMac];
+	CGFloat firstFontMacPoints = [firstFontMac pointSize];
+
+	NSRange secondFontRangeMac;
+	id secondFontMac = [macString attribute:(id)kCTFontAttributeName atIndex:NSMaxRange(firstFontRangeMac) effectiveRange:&secondFontRangeMac];
+	CGFloat secondFontMacPoints = [secondFontMac pointSize];
+	
+	// create DTCoreText/iOS version
+	
+	DTHTMLAttributedStringBuilder *builder = [[DTHTMLAttributedStringBuilder alloc] initWithHTML:data options:nil documentAttributes:NULL];
+	
+	NSAttributedString *iosString = [builder generatedAttributedString];
+
+	NSRange firstFontRangeiOS;
+	CTFontRef firstFontiOS = (__bridge CTFontRef)[iosString attribute:(id)kCTFontAttributeName atIndex:0 effectiveRange:&firstFontRangeiOS];
+	CGFloat firstFontiOSPoints = CTFontGetSize(firstFontiOS);
+	
+	NSRange secondFontRangeiOS;
+	CTFontRef secondFontiOS = (__bridge CTFontRef)[iosString attribute:(id)kCTFontAttributeName atIndex:NSMaxRange(firstFontRangeiOS) effectiveRange:&secondFontRangeiOS];
+	CGFloat secondFontiOSPoints = CTFontGetSize(secondFontiOS);
+
+	STAssertEquals(firstFontMacPoints, firstFontiOSPoints, @"First Font should be same size");
+	STAssertEquals(secondFontMacPoints, secondFontiOSPoints, @"Second Font should be same size");
 }
 
 @end

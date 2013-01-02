@@ -17,7 +17,7 @@ static NSDictionary *entityReverseLookup = nil;
 
 - (NSUInteger)integerValueFromHex 
 {
-	NSUInteger result = 0;
+	int result = 0;
 	sscanf([self UTF8String], "%x", &result);
 	return result;
 }
@@ -35,6 +35,15 @@ static NSDictionary *entityReverseLookup = nil;
 	}
 	
 	return YES;
+}
+
+- (BOOL)isIgnorableWhitespace
+{
+	NSCharacterSet *whitespaceCharacterSet = [NSCharacterSet ignorableWhitespaceCharacterSet];
+	
+	NSString *tmpStr = [self stringByTrimmingCharactersInSet:whitespaceCharacterSet];
+	
+	return [tmpStr length]==0;
 }
 
 - (float)percentValue

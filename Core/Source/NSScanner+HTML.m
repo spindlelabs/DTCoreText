@@ -9,8 +9,6 @@
 #import "DTCoreText.h"
 #import "NSScanner+HTML.h"
 #import "NSCharacterSet+HTML.h"
-#import "NSString+HTML.h"
-
 
 @implementation NSScanner (HTML)
 
@@ -222,17 +220,18 @@
 - (BOOL)scanCSSAttribute:(NSString **)name value:(NSString **)value
 {
 	NSString *attrName = nil;
-	NSString *attrValue = nil;
+	NSMutableString *attrValue = [NSMutableString string];
 	
 	NSInteger initialScanLocation = [self scanLocation];
 	
 	NSCharacterSet *whiteCharacterSet = [NSCharacterSet whitespaceAndNewlineCharacterSet];
 	
+	NSMutableCharacterSet *nonWhiteCharacterSet = [[NSCharacterSet whitespaceAndNewlineCharacterSet] mutableCopy];
+	[nonWhiteCharacterSet formUnionWithCharacterSet:[NSCharacterSet characterSetWithCharactersInString:@";"]];
+	[nonWhiteCharacterSet invert];
 	
 	// alphanumeric plus -
 	NSCharacterSet *cssStyleAttributeNameCharacterSet = [NSCharacterSet cssStyleAttributeNameCharacterSet];
-	
-	
 	
 	if (![self scanCharactersFromSet:cssStyleAttributeNameCharacterSet intoString:&attrName])
 	{
@@ -252,14 +251,61 @@
 	// skip whitespace
 	[self scanCharactersFromSet:whiteCharacterSet intoString:NULL];
 	
-	if (![self scanUpToString:@";" intoString:&attrValue])
+	NSString *quote = nil;
+	if ([self scanCharactersFromSet:[NSCharacterSet quoteCharacterSet] intoString:&quote])
 	{
-		[self setScanLocation:initialScanLocation];
-		return NO;
+		// attribute is quoted
+		
+		if (![self scanUpToString:quote intoString:&attrValue])
+		{
+			[self setScanLocation:initialScanLocation];
+			return NO;
+		}
+		
+		// skip ending quote
+		[self scanString:quote intoString:NULL];
+		
+		// skip whitespace
+		[self scanCharactersFromSet:whiteCharacterSet intoString:NULL];
+		
+		//TODO: decode unicode sequences like "\2022"
+		
+		// skip ending characters
+		[self scanString:@";" intoString:NULL];
+	}
+	else
+	{
+		// attribute is not quoted, we append elements until we find a ; or the string is at the end
+		while (![self isAtEnd])
+		{
+			NSString *value = nil;
+			if (![self scanCharactersFromSet:nonWhiteCharacterSet intoString:&value])
+			{
+				// skip ending characters
+				[self scanString:@";" intoString:NULL];
+				
+				break;
+			}
+			
+			// interleave a space if there are multiple parts
+			if ([attrValue length])
+			{
+				[attrValue appendString:@" "];
+			}
+			
+			[attrValue appendString:value];
+			
+			// skip whitespace
+			[self scanCharactersFromSet:whiteCharacterSet intoString:NULL];
+			
+			if ([self scanString:@";" intoString:NULL])
+			{
+				// reached end of attribute
+				break;
+			}
+		}
 	}
 	
-	// skip ending characters
-	[self scanString:@";" intoString:NULL];
 	
 	
 	// Success 

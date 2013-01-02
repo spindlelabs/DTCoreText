@@ -8,6 +8,8 @@
 
 #if TARGET_OS_IPHONE
 #import <CoreText/CoreText.h>
+#elif TARGET_OS_MAC
+#import <ApplicationServices/ApplicationServices.h>
 #endif
 
 @class DTHTMLElement;
@@ -40,7 +42,7 @@ typedef enum
 @property (nonatomic, assign) DTTextAttachmentType contentType;
 @property (nonatomic, strong) NSURL *contentURL;
 @property (nonatomic, strong) NSURL *hyperLinkURL;
-@property (nonatomic, strong) NSString *hyperLinkGUID; // identifies hyperlink this is a part of
+@property (nonatomic, strong) NSString *hyperLinkGUID; // identifies the hyperlink this is part of
 @property (nonatomic, strong) NSDictionary *attributes;
 @property (nonatomic, assign) DTTextAttachmentVerticalAlignment verticalAlignment;
 

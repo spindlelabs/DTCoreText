@@ -23,17 +23,17 @@
 	
 	NSMutableDictionary *tmpDict = [NSMutableDictionary dictionary];
 	
-	while ([scanner scanCSSAttribute:&name value:&value]) 
+	while ([scanner scanCSSAttribute:&name value:&value])
 	{
 		[tmpDict setObject:value forKey:name];
 	}
 	
-	// converting to non-mutable costs 37.5% of method	
+	// converting to non-mutable costs 37.5% of method
 	//	return [NSDictionary dictionaryWithDictionary:tmpDict];
 	return tmpDict;
 }
 
-- (CGFloat)pixelSizeOfCSSMeasureRelativeToCurrentTextSize:(CGFloat)textSize
+- (CGFloat)pixelSizeOfCSSMeasureRelativeToCurrentTextSize:(CGFloat)textSize textScale:(CGFloat)textScale
 {
 	NSUInteger stringLength = [self length];
 	unichar *_characters = calloc(stringLength, sizeof(unichar));
@@ -66,7 +66,7 @@
 		{
 			commaSeen = YES;
 		}
-		else if (ch=='-') 
+		else if (ch=='-')
 		{
 			negative = YES;
 		}
@@ -83,7 +83,7 @@
 	}
 	
 	// skip whitespace
-	while (i<stringLength && IS_WHITESPACE(_characters[i])) 
+	while (i<stringLength && IS_WHITESPACE(_characters[i]))
 	{
 		i++;
 	}
@@ -108,6 +108,25 @@
 				}
 			}
 		}
+		else if (ch == 'p')
+		{
+			if (i<stringLength)
+			{
+				if (_characters[i] == 'x')
+				{
+					// absolute pixel value gets scaled
+					value *= textScale;
+				}
+				else if (_characters[i] == 't')
+				{
+					// 1 pt = 1.3333 px on Mac, so we do the same
+					value *= 1.3333f;
+					
+					// absolute pixel value gets scaled
+					value *= textScale;
+				}
+			}
+		}
 	}
 	
 	if (negative)
@@ -129,7 +148,7 @@
 	
 	NSMutableArray *tmpArray = [NSMutableArray array];
 	
-	while (![scanner isAtEnd]) 
+	while (![scanner isAtEnd])
 	{
 		DTColor *shadowColor = nil;
 		
@@ -149,14 +168,21 @@
 					[scanner scanUpToCharactersFromSet:tokenEndSet intoString:&blurString];
 					
 					
-					CGFloat offset_x = [offsetXString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
-					CGFloat offset_y = [offsetYString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
+					CGFloat offset_x = [offsetXString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
+					CGFloat offset_y = [offsetYString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
 					CGSize offset = CGSizeMake(offset_x, offset_y);
-					CGFloat blur = [blurString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
+					CGFloat blur = [blurString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
 					
-					NSDictionary *shadowDict = [NSDictionary dictionaryWithObjectsAndKeys:[NSValue valueWithCGSize:offset], @"Offset",
-												[NSNumber numberWithFloat:blur], @"Blur",
-												shadowColor, @"Color", nil];
+					NSValue *offsetValue;
+#if TARGET_OS_IPHONE
+					offsetValue = [NSValue valueWithCGSize:offset];
+#else
+					offsetValue = [NSValue valueWithSize:offset];
+#endif
+					
+					NSDictionary *shadowDict = [NSDictionary dictionaryWithObjectsAndKeys:offsetValue, @"Offset",
+														 [NSNumber numberWithFloat:blur], @"Blur",
+														 shadowColor, @"Color", nil];
 					
 					[tmpArray addObject:shadowDict];
 				}
@@ -182,23 +208,30 @@
 						}
 					}
 					
-					if (!shadowColor) 
+					if (!shadowColor)
 					{
 						// color is same as color attribute of style
 						shadowColor = color;
 					}
 					
-					CGFloat offset_x = [offsetXString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
-					CGFloat offset_y = [offsetYString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
+					CGFloat offset_x = [offsetXString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
+					CGFloat offset_y = [offsetYString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
 					CGSize offset = CGSizeMake(offset_x, offset_y);
-					CGFloat blur = [blurString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize];
+					CGFloat blur = [blurString pixelSizeOfCSSMeasureRelativeToCurrentTextSize:textSize textScale:1.0f];
 					
-					NSDictionary *shadowDict = [NSDictionary dictionaryWithObjectsAndKeys:[NSValue valueWithCGSize:offset], @"Offset",
-												[NSNumber numberWithFloat:blur], @"Blur",
-												shadowColor, @"Color", nil];
+					NSValue *offsetValue;
+#if TARGET_OS_IPHONE
+					offsetValue = [NSValue valueWithCGSize:offset];
+#else
+					offsetValue = [NSValue valueWithSize:offset];
+#endif
+					
+					NSDictionary *shadowDict = [NSDictionary dictionaryWithObjectsAndKeys:offsetValue, @"Offset",
+														 [NSNumber numberWithFloat:blur], @"Blur",
+														 shadowColor, @"Color", nil];
 					
 					[tmpArray addObject:shadowDict];
-				}	
+				}
 			}
 		}
 		
@@ -207,20 +240,105 @@
 		{
 			break;
 		}
-	}		
+	}
 	
 	
 	return tmpArray;
 }
 
-- (CGFloat)CSSpixelSize
+- (NSString *)stringByDecodingCSSContentAttribute
 {
-	if ([self hasSuffix:@"px"])
+	NSUInteger length = [self length];
+	
+	unichar *characters = calloc(length, sizeof(unichar));
+	unichar *final = calloc(length, sizeof(unichar));
+	
+	[self getCharacters:characters range:NSMakeRange(0, length)];
+	
+	NSUInteger outChars = 0;
+	
+	BOOL inEscapedSequence = NO;
+	unichar decodedChar = 0;
+	NSUInteger escapedCharacterCount = 0;
+	
+	for (NSUInteger idx=0; idx<length;idx++)
 	{
-		return [self floatValue];
+		unichar character = characters[idx];
+		
+		if (inEscapedSequence && (escapedCharacterCount<4))
+		{
+			if (character=='\\')
+			{
+				// escaped backslash
+				final[outChars++] = '\\';
+				inEscapedSequence = NO;
+			}
+			else if ((character>='0' && character<='9') || (character>='A' && character<='F') || (character>='a' && character<='f'))
+			{
+				// hex digit
+				decodedChar *= 16;
+				
+				if (character>='0' && character<='9')
+				{
+					decodedChar += (character - '0');
+				}
+				else if (character>='A' && character<='F')
+				{
+					decodedChar += (character - 'A' + 10);
+				}
+				else if (character>='a' && character<='f')
+				{
+					decodedChar += (character - 'a' + 10);
+				}
+				
+				escapedCharacterCount++;
+			}
+			else
+			{
+				// illegal character following slash
+				final[outChars++] = '\\';
+				final[outChars++] = character;
+				
+				inEscapedSequence = NO;
+			}
+		}
+		else
+		{
+			if (inEscapedSequence)
+			{
+				// output what we have decoded so far
+				final[outChars++] = decodedChar;
+			}
+			
+			if (character == '\\')
+			{
+				// begin of escape sequence
+				decodedChar = 0;
+				escapedCharacterCount = 0;
+				inEscapedSequence = YES;
+			}
+			else
+			{
+				inEscapedSequence = NO;
+				
+				// just copy
+				final[outChars++] = character;
+			}
+		}
 	}
 	
-	return [self floatValue];
+	// if string ended in escaped sequence we still need to output
+	if (inEscapedSequence)
+	{
+		// output what we have decoded so far
+		final[outChars++] = decodedChar;
+	}
+	
+	free(characters);
+	NSString *clean = [[NSString alloc] initWithCharacters:final length:outChars];
+	free(final);
+	
+	return clean;
 }
 
 @end

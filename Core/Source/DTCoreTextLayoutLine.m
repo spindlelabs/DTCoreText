@@ -25,11 +25,11 @@
 	
 	CGPoint _baselineOrigin;
 	
-	CGFloat ascent;
-	CGFloat descent;
-	CGFloat leading;
-	CGFloat width;
-	CGFloat trailingWhitespaceWidth;
+	CGFloat _ascent;
+	CGFloat _descent;
+	CGFloat _leading;
+	CGFloat _width;
+	CGFloat _trailingWhitespaceWidth;
 	
 	NSArray *_glyphRuns;
 
@@ -170,7 +170,7 @@
 		tmpRect.size.width = glyphFrame.origin.x + glyphFrame.size.width - tmpRect.origin.x;
 	}
 	
-	CGFloat maxX = CGRectGetMaxX(self.frame) - trailingWhitespaceWidth;
+	CGFloat maxX = CGRectGetMaxX(self.frame) - _trailingWhitespaceWidth;
 	if (CGRectGetMaxX(tmpRect) > maxX)
 	{
 		tmpRect.size.width = maxX - tmpRect.origin.x;
@@ -271,8 +271,8 @@
 	dispatch_sync(_syncQueue, ^{
 		if (!_didCalculateMetrics)
 		{
-			width = (CGFloat)CTLineGetTypographicBounds(_line, &ascent, &descent, &leading);
-			trailingWhitespaceWidth = (CGFloat)CTLineGetTrailingWhitespaceWidth(_line);
+			_width = (CGFloat)CTLineGetTypographicBounds(_line, &_ascent, &_descent, &_leading);
+			_trailingWhitespaceWidth = (CGFloat)CTLineGetTrailingWhitespaceWidth(_line);
 			
 			_didCalculateMetrics = YES;
 		}
@@ -365,7 +365,7 @@
 		[self _calculateMetrics];
 	}
 	
-	return CGRectMake(_baselineOrigin.x, _baselineOrigin.y - ascent, width, ascent + descent);
+	return CGRectMake(_baselineOrigin.x, _baselineOrigin.y - _ascent, _width, _ascent + _descent);
 }
 
 - (CGFloat)width
@@ -375,7 +375,7 @@
 		[self _calculateMetrics];
 	}
 	
-	return width;
+	return _width;
 }
 
 - (CGFloat)ascent
@@ -385,8 +385,20 @@
 		[self _calculateMetrics];
 	}
 	
-	return ascent;
+	return _ascent;
 }
+
+- (void)setAscent:(CGFloat)ascent
+{
+	// need to get metrics because otherwise ascent gets overwritten
+	if (!_didCalculateMetrics)
+	{
+		[self _calculateMetrics];
+	}
+	
+	_ascent = ascent;
+}
+
 
 - (CGFloat)descent
 {
@@ -395,7 +407,7 @@
 		[self _calculateMetrics];
 	}
 	
-	return descent;
+	return _descent;
 }
 
 - (CGFloat)leading
@@ -405,7 +417,7 @@
 		[self _calculateMetrics];
 	}
 	
-	return leading;
+	return _leading;
 }
 
 - (CGFloat)trailingWhitespaceWidth
@@ -415,17 +427,17 @@
 		[self _calculateMetrics];
 	}
 	
-	return trailingWhitespaceWidth;
+	return _trailingWhitespaceWidth;
 }
 
 
 @synthesize frame =_frame;
 @synthesize glyphRuns = _glyphRuns;
 
-@synthesize ascent;
-@synthesize descent;
-@synthesize leading;
-@synthesize trailingWhitespaceWidth;
+@synthesize ascent = _ascent;
+@synthesize descent = _descent;
+@synthesize leading = _leading;
+@synthesize trailingWhitespaceWidth = _trailingWhitespaceWidth;
 
 @synthesize baselineOrigin = _baselineOrigin;
 

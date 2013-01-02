@@ -9,7 +9,11 @@
 #import "DTCoreTextFontCollection.h"
 #import "DTCoreTextFontDescriptor.h"
 
+#if TARGET_OS_IPHONE
 #import <CoreText/CoreText.h>
+#elif TARGET_OS_MAC
+#import <ApplicationServices/ApplicationServices.h>
+#endif
 
 @interface DTCoreTextFontCollection ()
 
@@ -24,7 +28,7 @@ static DTCoreTextFontCollection *_availableFontsCollection = nil;
 @implementation DTCoreTextFontCollection
 {
 	NSArray *_fontDescriptors;
-	NSCache *fontMatchCache;
+	NSCache *_fontMatchCache;
 }
 
 + (DTCoreTextFontCollection *)availableFontsCollection
@@ -136,12 +140,12 @@ static DTCoreTextFontCollection *_availableFontsCollection = nil;
 
 - (NSCache *)fontMatchCache
 {
-	if (!fontMatchCache)
+	if (!_fontMatchCache)
 	{
-		fontMatchCache = [[NSCache alloc] init];
+		_fontMatchCache = [[NSCache alloc] init];
 	}
 	
-	return fontMatchCache;
+	return _fontMatchCache;
 }
 
 - (NSArray *)fontFamilyNames
@@ -162,6 +166,6 @@ static DTCoreTextFontCollection *_availableFontsCollection = nil;
 }
 
 @synthesize fontDescriptors = _fontDescriptors;
-@synthesize fontMatchCache;
+@synthesize fontMatchCache = _fontMatchCache;
 
 @end
